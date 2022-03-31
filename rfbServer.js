@@ -1,6 +1,8 @@
 const net = require('net');
+const jimp = require('jimp');
 const { Buffer } = require('buffer');
 const sysInfo = require('systeminformation');
+const screenshot = require('screenshot-desktop')
 
 const handleRFBCreated = (socket) => {
     const sendSecurityHandshake = () => {
@@ -133,10 +135,16 @@ const handleRFBCreated = (socket) => {
         sysInfo.graphics((graphicsInformation) => {
             let selectedDisplay = graphicsInformation.displays[0];
             processNearestBPS(selectedDisplay.pixelDepth, (SELECTED_BIT_PER_PIXEL) => {
-                BITS_PER_PIXEL.writeUInt8(SELECTED_BIT_PER_PIXEL, 0)
+                BITS_PER_PIXEL.writeUInt8((SELECTED_BIT_PER_PIXEL), 0)
                 DEPTH.writeUInt8(selectedDisplay.pixelDepth, 0);
                 BIG_ENDIAN_FLAG.writeUInt8(0, 0);
-                TRUE_COLOR_FLAG.writeUInt8(0, 0);
+                TRUE_COLOR_FLAG.writeUInt8(1, 0);
+                RED_MAX.writeUInt16BE(255, 0);
+                GREEN_MAX.writeUInt16BE(255, 0);
+                BLUE_MAX.writeUInt16BE(255, 0);
+                RED_SHIFT.writeUInt8(16, 0);
+                GREEN_SHIFT.writeUInt8(8, 0);
+                BLUE_SHIFT.writeUInt8(0, 0);
                 PADDING.writeUInt8(0, 0);
 
                 PIXEL_FORMAT = Buffer.concat([
@@ -152,7 +160,7 @@ const handleRFBCreated = (socket) => {
                     BLUE_SHIFT,
                     PADDING
                 ]);
-                
+
                 FRAMEBUFFER_WIDTH.writeUInt16BE(selectedDisplay.currentResX, 0);
                 FRAMEBUFFER_HEIGHT.writeUInt16BE(selectedDisplay.currentResY, 0);
                 NAME_LENGTH.writeUInt32BE(8, 0);
@@ -167,8 +175,149 @@ const handleRFBCreated = (socket) => {
                 ]);
 
                 socket.write(SERVER_INIT_MESSAGE, () => {
-                    socket.on('data', (clientMessage) => {
-                        console.log(clientMessage.toString());
+                    socket.on('data', (CLIENT_COM) => {
+                        let MESSAGE_TYPE;
+                        MESSAGE_TYPE = Buffer.allocUnsafe(1);
+                        CLIENT_COM.copy(MESSAGE_TYPE, 0, 0, 1);
+
+                        const parsePixelFormatMessage = () => {
+                            //CLIENT_COM.copy(PIXEL_FORMAT, 0, 4);
+                        }
+
+                        const parseSetEncodingMessage = () => {
+
+                        }
+
+                        const parseFrameBufferUpdateMessage = () => {
+                            let
+                                INCREMENTAL,
+                                X_POSITION,
+                                Y_POSITION,
+                                WIDTH,
+                                HEIGHT;
+
+                            INCREMENTAL = Buffer.allocUnsafe(1);
+                            X_POSITION = Buffer.allocUnsafe(2);
+                            Y_POSITION = Buffer.allocUnsafe(2);
+                            WIDTH = Buffer.allocUnsafe(2);
+                            HEIGHT = Buffer.allocUnsafe(2);
+
+                            CLIENT_COM.copy(INCREMENTAL, 0, 1, 2);
+                            CLIENT_COM.copy(X_POSITION, 0, 2, 4);
+                            CLIENT_COM.copy(Y_POSITION, 0, 4, 6);
+                            CLIENT_COM.copy(WIDTH, 0, 6, 8);
+                            CLIENT_COM.copy(HEIGHT, 0, 8, 10);
+
+                            /*
+                                Frame Buffer Update Header:
+                                +--------------+--------------+----------------------+
+                                | No. of bytes | Type [Value] | Description          |
+                                +--------------+--------------+----------------------+
+                                | 1            | U8 [0]       | message-type         |
+                                | 1            |              | padding              |
+                                | 2            | U16          | number-of-rectangles |
+                                +--------------+--------------+----------------------+                            
+
+                                Followed By Update Content:
+                                +--------------+--------------+---------------+
+                                | No. of bytes | Type [Value] | Description   |
+                                +--------------+--------------+---------------+
+                                | 2            | U16          | x-position    |
+                                | 2            | U16          | y-position    |
+                                | 2            | U16          | width         |
+                                | 2            | U16          | height        |
+                                | 4            | S32          | encoding-type |
+                                +--------------+--------------+---------------+
+                                
+                                RFB Implementations demonstrate passing the Frame Buffer Data
+                                After all the above information as PIXEL_DATA in Chosen Encod
+                                -ing format.
+
+                                Value Encoding Type S32 indicates a Signed 32bit Integer Value.
+                            */
+
+                            let 
+                                FRAME_BUFFER_UPDATE_MSG,
+                                UPDATE_MESSAGE_TYPE,
+                                UPDATE_PADDING,
+                                UPDATE_RECT_COUNT,
+                                UPDATE_ENCODING_TYPE;
+
+                            UPDATE_MESSAGE_TYPE = Buffer.allocUnsafe(1);
+                            UPDATE_PADDING = Buffer.allocUnsafe(1);
+                            UPDATE_RECT_COUNT = Buffer.allocUnsafe(2);
+                            UPDATE_ENCODING_TYPE = Buffer.allocUnsafe(4);
+
+                            UPDATE_MESSAGE_TYPE.writeUInt8(0, 0);
+                            UPDATE_PADDING.writeUInt8(0, 0);
+                            UPDATE_RECT_COUNT.writeUint16BE(0, 0); /* Change to Number of Rectangles. */
+                            UPDATE_ENCODING_TYPE.writeInt32BE(0, 0); /* ENCODING_TYPE (SET RAW) */
+
+                            if (+INCREMENTAL.readUInt8(0).toString() != 999) {
+                                screenshot().then((SC_BUFFER) => {
+                                    jimp.read(SC_BUFFER, (err, JIMP_SC) => {
+                                        let RGB_PIXEL_ARRAY = [];
+                                        FRAME_BUFFER_UPDATE_MSG = Buffer.concat([
+                                            UPDATE_MESSAGE_TYPE,
+                                            UPDATE_PADDING,
+                                            UPDATE_RECT_COUNT,
+                                            X_POSITION,
+                                            Y_POSITION,
+                                            WIDTH,
+                                            HEIGHT,
+                                            UPDATE_ENCODING_TYPE
+                                        ]);
+
+                                        //SEND PIXEL_INFO
+                                        socket.write(FRAME_BUFFER_UPDATE_MSG);
+                                    });
+                                });
+                            } else {
+
+                            }
+                        }
+
+                        const parseKeyEventMessage = () => { }
+                        const parsePointerEventMessage = () => { }
+                        const parseClientCutTxtMessage = () => { }
+
+                        /*
+                            +--------+--------------------------+
+                            | Number | Name                     |
+                            +--------+--------------------------+
+                            | 0      | SetPixelFormat           |
+                            | 2      | SetEncodings             |
+                            | 3      | FramebufferUpdateRequest |
+                            | 4      | KeyEvent                 |
+                            | 5      | PointerEvent             |
+                            | 6      | ClientCutText            |
+                            +--------+--------------------------+                        
+                        */
+
+                        console.log(`Recevied Signal ${+MESSAGE_TYPE.readUInt8(0).toString()}`);
+                        switch (+MESSAGE_TYPE.readUInt8(0).toString()) {
+                            case 0:
+                                parsePixelFormatMessage();
+                                break;
+                            case 2:
+                                parseSetEncodingMessage();
+                                break;
+                            case 3:
+                                parseFrameBufferUpdateMessage();
+                                break;
+                            case 4:
+                                parseKeyEventMessage();
+                                break;
+                            case 5:
+                                parsePointerEventMessage();
+                                break;
+                            case 6:
+                                parseClientCutTxtMessage();
+                                break;
+                            default:
+                                console.log(`API for MESSAGE_TYPE ${MESSAGE_TYPE.readUInt8(0).toString()} Not Implemented.`)
+                                break;
+                        }
                     })
                 });
             });
@@ -191,7 +340,7 @@ const handleRFBCreated = (socket) => {
 
 const server = net.createServer(handleRFBCreated).on('error', (err) => {
     // Handle errors here.
-    throw err;
+    console.log(err);
 });
 
 // Grab an arbitrary unused port.

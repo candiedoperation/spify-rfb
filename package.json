@@ -9,6 +9,7 @@
   "author": "Atheesh Thirumalairajan",
   "license": "ISC",
   "dependencies": {
+    "jimp": "^0.16.1",
     "screenshot-desktop": "^1.12.7",
     "systeminformation": "^5.11.9"
   }
