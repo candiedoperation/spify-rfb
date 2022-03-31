@@ -1,0 +1,15 @@
+{
+  "name": "spify-rfb",
+  "version": "1.0.0",
+  "description": "Server based on RFB Protocol for Spify",
+  "main": "rfbServer.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Atheesh Thirumalairajan",
+  "license": "ISC",
+  "dependencies": {
+    "screenshot-desktop": "^1.12.7",
+    "systeminformation": "^5.11.9"
+  }
+}
